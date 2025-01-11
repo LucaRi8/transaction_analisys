@@ -9,6 +9,24 @@ import plotly.express as px
 path = '/Users/lucariotto/Documents/Personal/Gestione denaro/Analisi spese/Gestione entrate-spese.xlsx'
 transaction_df = pd.read_excel(path, sheet_name='Transazioni')
 
+# associations between catecories and subcategories
+categories_associations = {
+    "Casa": ["Affitto", "Bollette", "Pulizia", np.nan],
+    "Spesa": [np.nan],
+    "Viaggi/Esperienze": [np.nan],
+    "Trasporti": ["Benzina", "Mezzi pubblici", "Mezzi a noleggio", "Autostrada", np.nan],
+    "Serate": ["Alcool", "Entrate/Biglietti", np.nan],
+    "Pasti fuori": ["Cene", "Pranzi", "Pranzi lavoro", np.nan],
+    "Sport": ["Pass", "Attrezzatura", np.nan],
+    "Abbonamenti": [np.nan],
+    "Shopping": [np.nan],
+    "Stipendio": [np.nan],
+    "Altre entrate": [np.nan],
+    "Giroconto entrata": [np.nan],
+    "Giroconto uscita": [np.nan],
+    "Altro": [np.nan]
+}
+
 # cleaning of data
 cols_to_keep = [
     "DATA",
@@ -21,10 +39,19 @@ cols_to_keep = [
     "SOTTOCATEGORIA",
     "IMPORTO"
 ]
+
 category_df = transaction_df.loc[transaction_df['CATEGORIE'].notna(), 'CATEGORIE']
 transaction_df = transaction_df[cols_to_keep]
 transaction_df.loc[:,'mese_anno'] = transaction_df['DATA'].dt.to_period('M')
 mese_anno_df = pd.DataFrame(transaction_df['mese_anno'].unique(), columns=['mese_anno'])
+
+# fill the missing categoriees and sub cateories with zero transaction value
+subcat_df = pd.DataFrame(columns=['CATEGORIA', 'SOTTOCATEGORIA'])
+for key in categories_associations:
+    cat = [key] * len(categories_associations[key])
+    subcat_df = pd.concat([subcat_df, pd.DataFrame({'CATEGORIA': cat, 
+                                                   'SOTTOCATEGORIA' : categories_associations[key]})],
+                                                     axis=0)
 df_outer_join = pd.merge(
     mese_anno_df,  # seleziona solo la colonna 'mese_anno'
     category_df,  # seleziona solo la colonna 'categoria'
@@ -32,17 +59,21 @@ df_outer_join = pd.merge(
     on=None,  # nessuna colonna su cui fare l'unione
 )
 df_outer_join.rename(columns={'CATEGORIE': 'CATEGORIA'}, inplace=True)
-
+df_outer_join = pd.merge(
+    df_outer_join,
+    subcat_df,
+    on='CATEGORIA',
+    how='left'
+)
 transaction_df = pd.merge(
     df_outer_join,
     transaction_df,
     how='left',
-    on=['mese_anno', 'CATEGORIA']
+    on=['mese_anno', 'CATEGORIA', 'SOTTOCATEGORIA']
 )
-
-transaction_df['IMPORTO'] = np.where(transaction_df['IMPORTO'].isna(), 0, transaction_df['IMPORTO'])
-
+    
 # fill some na column
+transaction_df['IMPORTO'] = np.where(transaction_df['IMPORTO'].isna(), 0, transaction_df['IMPORTO'])
 exit_category = [
     "Casa",
     "Spesa",
@@ -72,7 +103,7 @@ page = st.sidebar.radio('Pages', options=['Expenses', 'Income', 'Assets'])
 window = st.sidebar.number_input(
         "Insert the window size for mooving average for all expenses plot",
         min_value=2,  # min value
-        value=10,      # default value
+        value=12,      # default value
         step=1        # step
         )
 
@@ -84,15 +115,14 @@ if page == 'Expenses':
         st.write('<p style="font-size:24px; color:white;">Monthly expenses time series</p>', unsafe_allow_html=True)
         st.write('Chart showing the aggregated monthly expenses and the moving average')
         # plot the monthly expenses 
-        all_montly_exp = transact_plot.montly_ma_plot(column_name='IMPORTO', window=window, date_name = 'DATA')
+        all_montly_exp = transact_plot.montly_ma_plot(column_name='IMPORTO', window=window, date_name = 'mese_anno')
         st.plotly_chart(all_montly_exp)
 
     with col2:
         st.write('<p style="font-size:24px; color:whitw;">Monthly cashflow time series</p>', unsafe_allow_html=True)
         st.write('Chart showing the aggregated monthly cashflof and the moving average')
         # plot the monthly expenses 
-        # plot the monthly expenses 
-        cash_flow_plot = transact_plot.cash_flow_plot(column_name='IMPORTO', window=window, date_name = 'DATA')
+        cash_flow_plot = transact_plot.cash_flow_plot(column_name='IMPORTO', window=window, date_name = 'mese_anno')
         st.plotly_chart(cash_flow_plot)
 
     # expeses for category analysis
@@ -132,17 +162,12 @@ if page == 'Expenses':
     # expeses for category analysis graphical visualization
     col1, col2 = st.columns(2)
     with col1:
-        category = transaction_df.loc[transaction_df['TIPO TRANSAZIONE'] == 'Uscita', 'CATEGORIA'].unique().tolist()
-        choice1 = st.selectbox("Select the category for compute the monthly expenses", category,  key="category_selectbox")
-        if choice1 in exit_category:
-            type_transaction = 'Uscita'
-        else : 
-            type_transaction = 'Entrata'
+        choice1 = st.selectbox("Select the category for compute the monthly expenses", exit_category,  key="category_selectbox")
         st.write(f'<p style="font-size:24px; color:white;">Monthly expenditure chart for the {choice1} category</p>', 
                 unsafe_allow_html=True)
         # plot the monthly expenses for category
-        choice1_montly_exp=transact_plot.montly_ma_plot(column_name='IMPORTO', window=10, date_name = 'DATA', 
-                                                        category=choice1, type_transaction=type_transaction)
+        choice1_montly_exp=transact_plot.montly_ma_plot(column_name='IMPORTO', window=window, date_name = 'mese_anno', 
+                                                        category=choice1, category_column='CATEGORIA')
         st.plotly_chart(choice1_montly_exp)
 
     with col2:
@@ -152,5 +177,38 @@ if page == 'Expenses':
         st.write(f'<p style="font-size:24px; color:white;">Monthly expenditure chart for the {choice2} subcategory</p>', 
                 unsafe_allow_html=True)
         # plot the monthly expenses for category
-        choice2_montly_exp=transact_plot.montly_ma_plot(column_name='IMPORTO', window=10, date_name = 'DATA', sub_category=choice2)
+        choice2_montly_exp=transact_plot.montly_ma_plot(column_name='IMPORTO', window=window, date_name = 'mese_anno', sub_category=choice2)
         st.plotly_chart(choice2_montly_exp)
+
+    # daily expenses analysis
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f'<p style="font-size:24px; color:white;">Table of daily average expenses</p>', 
+                unsafe_allow_html=True)
+        daily_expenses_df = (transaction_df.dropna(subset=['GIORNO'])
+                             .groupby('GIORNO')['IMPORTO']
+                             .mean())
+        st.dataframe(daily_expenses_df)
+    
+    with col2:
+        fig = px.bar(
+            daily_expenses_df.reset_index(), 
+            x='GIORNO', 
+            y='IMPORTO', 
+            title='Varplot of Average daily expenses', 
+            labels={'IMPORTO': 'Value (€)', 'GIORNO': 'Day'},  
+            color='GIORNO',  
+            text='IMPORTO' 
+        )
+
+        # add layout settings
+        fig.update_traces(texttemplate='%{text:.2s}', textposition='outside') 
+        fig.update_layout(
+            uniformtext_minsize=8, 
+            uniformtext_mode='hide',
+            xaxis_title="Day",
+            yaxis_title="Value (€)",
+        )
+        st.plotly_chart(fig)
+
+

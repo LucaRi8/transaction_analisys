@@ -10,13 +10,13 @@ class graphical_analysis:
     def __init__(self, df):
         self.df = df
 
-    def montly_ma_plot(self, column_name, window = 10, date_name = 'mese_anno', category = 'all', category_column = 'CATEGORIA',
+    def montly_ma_plot(self, column_name, window = 12, date_name = 'mese_anno', category = 'all', category_column = 'CATEGORIA',
                          type_transaction_col = 'TIPO TRANSAZIONE', type_transaction = 'Uscita', sub_category = 'all', 
                          sub_category_column = 'SOTTOCATEGORIA'):
         # function that perform an aggregation over month-year of the column and
         # plot the raw data and the ewma mean of the data over time
         # column_name : the name of the column to plot
-        # date_name : the name of the column that contain the date, if missing date_name = 'DATE'
+        # date_name : the name of the column that contain the date, if missing date_name = 'mese_anno'
         # window : the value of the parameter of the mooving average
         # category : set the specific category to filter data
         # category_column : define the name of the column thath contain the different category of expenses
@@ -38,6 +38,7 @@ class graphical_analysis:
                 raise ValueError(f"category_column must be one of {[col for col in montly_ma_df.columns if col != date_name]}")
             if category not in montly_ma_df[category_column].unique().tolist():
                 raise ValueError(f"category must be one of {montly_ma_df[category_column].unique().tolist()}")
+            montly_ma_df = montly_ma_df.groupby([date_name, category_column])[[column_name]].sum().reset_index()
             montly_ma_df = montly_ma_df[montly_ma_df[category_column] == category]
         
         if sub_category != 'all':
@@ -47,9 +48,9 @@ class graphical_analysis:
                 raise ValueError(f"sub category must be one of {montly_ma_df[sub_category_column].unique().tolist()}")
             montly_ma_df = montly_ma_df[montly_ma_df[sub_category_column] == sub_category]
 
-        montly_ma_df = montly_ma_df.groupby('mese_anno')[[column_name]].sum()
+        montly_ma_df = montly_ma_df.groupby(date_name)[[column_name]].sum()
         montly_ma_df.reset_index(inplace=True)
-        montly_ma_df['mese_anno'] = montly_ma_df['mese_anno'].astype('str')
+        montly_ma_df[date_name] = montly_ma_df[date_name].astype('str')
         montly_ma_df[f'{column_name}_ma'] = montly_ma_df[column_name].rolling(window=window, min_periods=1).mean()
 
         # create plot object
@@ -57,7 +58,7 @@ class graphical_analysis:
 
         # add moving average line
         fig.add_trace(go.Scatter(
-            x=montly_ma_df["mese_anno"], 
+            x=montly_ma_df[date_name], 
             y=montly_ma_df[f"{column_name}_ma"], 
             mode='lines+markers',
             name='Moving average',
@@ -67,7 +68,7 @@ class graphical_analysis:
 
         # add line for raw data
         fig.add_trace(go.Scatter(
-            x=montly_ma_df["mese_anno"], 
+            x=montly_ma_df[date_name], 
             y=montly_ma_df[column_name], 
             mode='lines+markers',
             name='Raw data',
@@ -87,11 +88,11 @@ class graphical_analysis:
 
         return fig
 
-    def cash_flow_plot(self, column_name, date_name = 'mese_anno', window=10, type_transaction_col = 'TIPO TRANSAZIONE'):
+    def cash_flow_plot(self, column_name, date_name = 'mese_anno', window=12, type_transaction_col = 'TIPO TRANSAZIONE'):
         # function that perform an aggregation over month-year of the column and
         # plot the the difference between income and expence
         # column_name : the name of the column to plot
-        # date_name : the name of the column that contain the date, if missing date_name = 'DATE'
+        # date_name : the name of the column that contain the date, if missing date_name = 'mese_anno'
         # window : the value of the parameter of the mooving average
         # type_transaction_col : col that define the type of transaction 
 
@@ -100,17 +101,17 @@ class graphical_analysis:
         if type_transaction_col not in cash_flow_df.columns:
             raise ValueError(f"type_transaction_col must be one of {[col for col in cash_flow_df.columns if col != date_name]}")
         
-        pivot_df = cash_flow_df.pivot_table(values=column_name, index='mese_anno', columns=type_transaction_col, aggfunc='sum')
+        pivot_df = cash_flow_df.pivot_table(values=column_name, index=date_name, columns=type_transaction_col, aggfunc='sum')
         pivot_df.reset_index(inplace=True)
         pivot_df['cash_flow'] = pivot_df['Entrata'] - pivot_df['Uscita']
         pivot_df['ma_cash_flow'] = pivot_df['cash_flow'].rolling(window=window, min_periods=1).mean()
-        pivot_df['mese_anno'] = pivot_df['mese_anno'].astype('str')
+        pivot_df[date_name] = pivot_df[date_name].astype('str')
         
         # create plot object
         fig = go.Figure()
         # add line for mooving average of cash_flow
         fig.add_trace(go.Scatter(
-            x=pivot_df["mese_anno"], 
+            x=pivot_df[date_name], 
             y=pivot_df["ma_cash_flow"], 
             mode='lines+markers',
             name='Moving average cash flow',
@@ -120,7 +121,7 @@ class graphical_analysis:
 
         # add line for raw cashflow
         fig.add_trace(go.Scatter(
-            x=pivot_df["mese_anno"], 
+            x=pivot_df[date_name], 
             y=pivot_df['cash_flow'], 
             mode='lines+markers',
             name='Raw cash flow',
