@@ -90,10 +90,3 @@ class graphical_analysis:
         plt.legend(loc='best')
         plt.show()
         
-
-
-
-path = '/Users/lucariotto/Documents/Personal/Gestione denaro/Analisi spese/Gestione entrate-spese.xlsx'
-transaction_df = pd.read_excel(path, sheet_name='Transazioni')
-gr = graphical_analysis(transaction_df)
-gr.cash_flow_plot(column_name='IMPORTO', alpha=0.1, date_name='DATA')
