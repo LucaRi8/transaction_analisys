@@ -127,16 +127,30 @@ if page == 'Expenses':
 
     # expeses for category analysis
     col1, col2 = st.columns(2)
+    year_month = (
+        transaction_df
+        .sort_values(by = 'mese_anno', ascending = False)['mese_anno']
+        .astype('str')
+        .unique()
+        )
+    year_month = list(year_month[:3]) + ['Mooving average']
     with col1:
-        # table for montly expenses divided by category
-        category_expenses = (transaction_df[transaction_df['TIPO TRANSAZIONE'] == 'Uscita']
-                        .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
-                        .sum().reset_index())
-        category_expenses = (category_expenses.groupby('CATEGORIA')['IMPORTO']
-                             .rolling(window=window, min_periods=1).mean()
-                             .reset_index().groupby('CATEGORIA')
-                            .last().drop(['level_1'], axis=1))
-        st.dataframe(category_expenses)  
+        ym1 = st.selectbox("Select between the month of interest or a mooving average", year_month,  index=3)
+        if ym1 == 'Mooving average':
+            # table for montly expenses divided by category
+            category_expenses = (transaction_df[transaction_df['TIPO TRANSAZIONE'] == 'Uscita']
+                            .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
+                            .sum().reset_index())
+            category_expenses = (category_expenses.groupby('CATEGORIA')['IMPORTO']
+                                .rolling(window=window, min_periods=1).mean()
+                                .reset_index().groupby('CATEGORIA')
+                                .last().drop(['level_1'], axis=1))
+            st.dataframe(category_expenses)  
+        else:
+            category_expenses = (transaction_df[(transaction_df['TIPO TRANSAZIONE'] == 'Uscita') & (transaction_df['mese_anno'] == ym1)]
+                            .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
+                            .sum().reset_index())
+            st.dataframe(category_expenses)
     
     with col2:
         category_expenses.reset_index(inplace=True)
@@ -212,3 +226,4 @@ if page == 'Expenses':
         st.plotly_chart(fig)
 
 
+# analysis of income
