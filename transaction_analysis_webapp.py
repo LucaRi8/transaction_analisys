@@ -86,7 +86,13 @@ exit_category = [
     "Shopping",
     "Altro"
 ]
-transaction_df['TIPO TRANSAZIONE'] = np.where(transaction_df['CATEGORIA'].isin(exit_category), 'Uscita', 'Entrata')
+ciroconti_category = [
+    'Giroconto uscita',
+    'Giroconto entrata'
+]
+transaction_df['TIPO TRANSAZIONE'] = np.where(transaction_df['CATEGORIA'].isin(exit_category), 'Uscita', 
+                                              np.where(transaction_df['CATEGORIA'].isin(ciroconti_category), 
+                                                       'Giroconto', 'Entrata'))
 
 # inizialize data in graphical_analysis class 
 transact_plot = graphical_analysis(transaction_df)
@@ -227,3 +233,68 @@ if page == 'Expenses':
 
 
 # analysis of income
+if page == 'Income':
+    # title of the page
+    st.title("Analysis of expenses") 
+    col1, col2 = st.columns(2)
+
+    with col1:
+         st.write('<p style="font-size:24px; color:white;">Monthly income time series</p>', unsafe_allow_html=True)
+         income_plot = transact_plot.montly_ma_plot(column_name='IMPORTO', window=window, date_name='mese_anno', 
+                                                    type_transaction_col='TIPO TRANSAZIONE', type_transaction='Entrata')
+         st.plotly_chart(income_plot)
+
+    with col2: 
+        year_month = (
+            transaction_df
+            .sort_values(by = 'mese_anno', ascending = False)['mese_anno']
+            .astype('str')
+            .unique()
+        )
+        year_month = list(year_month[:3]) + ['Mooving average']
+        my = st.selectbox("Select between the month of interest or a mooving average", year_month)
+        if my != 'Mooving average':
+            income_df = (
+            transaction_df[(transaction_df['TIPO TRANSAZIONE']=='Entrata') & (transaction_df['mese_anno']==my)]
+            .groupby('CATEGORIA')[['IMPORTO']]
+            .sum()
+            )
+        else:
+            income_df = (
+                transaction_df[transaction_df['TIPO TRANSAZIONE']=='Entrata']
+                .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
+                .sum()
+                .reset_index()
+                .groupby('CATEGORIA')['IMPORTO']
+                .rolling(window=window, min_periods=1)
+                .mean()
+                .reset_index().groupby('CATEGORIA')
+                .last().drop(['level_1'], axis=1)
+                )
+        st.write('<p style="font-size:24px; color:white;">Income divided by type</p>', unsafe_allow_html=True)
+        st.dataframe(income_df)
+        
+    #Pie plot of income divided by type
+    income_df.reset_index(inplace=True)
+    st.write('<p style="font-size:24px; color:white;">Pie plot of income divided by type</p>', 
+                 unsafe_allow_html=True)
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=income_df['CATEGORIA'],        # Labels (categories)
+                values=income_df['IMPORTO'],           # Values
+                hoverinfo='label+percent+value', # Show label, percentage, and value on hover
+                textinfo='percent',           # Display only percentage on the pie chart
+                #marker=dict(colors=['#636EFA', '#EF553B', '#00CC96', '#AB63FA']),  # Custom colors
+                )
+            ]
+    )
+    # Update layout to include a legend
+    fig.update_layout(
+        title="Income Category Distribution",
+        legend=dict(title="Categories", orientation="v", x=1, y=1),
+    )
+    st.plotly_chart(fig)
+        
+
+

@@ -88,13 +88,16 @@ class graphical_analysis:
 
         return fig
 
-    def cash_flow_plot(self, column_name, date_name = 'mese_anno', window=12, type_transaction_col = 'TIPO TRANSAZIONE'):
+    def cash_flow_plot(self, column_name, date_name = 'mese_anno', window=12, type_transaction_col = 'TIPO TRANSAZIONE',
+                       transaction_type1 = 'Entrata', transaction_type2 = 'Uscita'):
         # function that perform an aggregation over month-year of the column and
         # plot the the difference between income and expence
         # column_name : the name of the column to plot
         # date_name : the name of the column that contain the date, if missing date_name = 'mese_anno'
         # window : the value of the parameter of the mooving average
         # type_transaction_col : col that define the type of transaction 
+        # transaction_type1
+        # transaction_type2
 
         cash_flow_df = self.df
 
@@ -103,7 +106,7 @@ class graphical_analysis:
         
         pivot_df = cash_flow_df.pivot_table(values=column_name, index=date_name, columns=type_transaction_col, aggfunc='sum')
         pivot_df.reset_index(inplace=True)
-        pivot_df['cash_flow'] = pivot_df['Entrata'] - pivot_df['Uscita']
+        pivot_df['cash_flow'] = pivot_df[transaction_type1] - pivot_df[transaction_type2]
         pivot_df['ma_cash_flow'] = pivot_df['cash_flow'].rolling(window=window, min_periods=1).mean()
         pivot_df[date_name] = pivot_df[date_name].astype('str')
         
