@@ -195,7 +195,7 @@ if page == 'Expenses':
             daily_expenses_df.reset_index(), 
             x='GIORNO', 
             y='IMPORTO', 
-            title='Varplot of Average daily expenses', 
+            title='Barplot of Average daily expenses', 
             labels={'IMPORTO': 'Value (€)', 'GIORNO': 'Day'},  
             color='GIORNO',  
             text='IMPORTO' 
