@@ -149,7 +149,7 @@ if page == 'Expenses':
         else:
             category_expenses = (transaction_df[(transaction_df['TIPO TRANSAZIONE'] == 'Uscita') & (transaction_df['mese_anno'] == ym1)]
                             .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
-                            .sum().reset_index())
+                            .sum())
             st.dataframe(category_expenses)
     
     with col2:
