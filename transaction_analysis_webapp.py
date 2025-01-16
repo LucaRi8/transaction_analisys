@@ -1,3 +1,4 @@
+from const import tipo_conto_ass, categories_associations, cols_to_keep
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,37 +9,6 @@ import plotly.express as px
 
 path = '/Users/lucariotto/Documents/Personal/Gestione denaro/Analisi spese/Gestione entrate-spese.xlsx'
 transaction_df = pd.read_excel(path, sheet_name='Transazioni')
-
-# associations between catecories and subcategories
-categories_associations = {
-    "Casa": ["Affitto", "Bollette", "Pulizia", np.nan],
-    "Spesa": [np.nan],
-    "Viaggi/Esperienze": [np.nan],
-    "Trasporti": ["Benzina", "Mezzi pubblici", "Mezzi a noleggio", "Autostrada", np.nan],
-    "Serate": ["Alcool", "Entrate/Biglietti", np.nan],
-    "Pasti fuori": ["Cene", "Pranzi", "Pranzi lavoro", np.nan],
-    "Sport": ["Pass", "Attrezzatura", np.nan],
-    "Abbonamenti": [np.nan],
-    "Shopping": [np.nan],
-    "Stipendio": [np.nan],
-    "Altre entrate": [np.nan],
-    "Giroconto entrata": [np.nan],
-    "Giroconto uscita": [np.nan],
-    "Altro": [np.nan]
-}
-
-# cleaning of data
-cols_to_keep = [
-    "DATA",
-    "GIORNO",
-    "MESE",
-    "ANNO",
-    "TIPO TRANSAZIONE",
-    "CONTO",
-    "CATEGORIA",
-    "SOTTOCATEGORIA",
-    "IMPORTO"
-]
 
 category_df = transaction_df.loc[transaction_df['CATEGORIE'].notna(), 'CATEGORIE']
 transaction_df = transaction_df[cols_to_keep]
@@ -74,22 +44,8 @@ transaction_df = pd.merge(
     
 # fill some na column
 transaction_df['IMPORTO'] = np.where(transaction_df['IMPORTO'].isna(), 0, transaction_df['IMPORTO'])
-exit_category = [
-    "Casa",
-    "Spesa",
-    "Viaggi/Esperienze",
-    "Trasporti",
-    "Serate",
-    "Pasti fuori",
-    "Sport",
-    "Abbonamenti",
-    "Shopping",
-    "Altro"
-]
-ciroconti_category = [
-    'Giroconto uscita',
-    'Giroconto entrata'
-]
+exit_category = tipo_conto_ass['Uscita']
+ciroconti_category = tipo_conto_ass['Giroconto']
 transaction_df['TIPO TRANSAZIONE'] = np.where(transaction_df['CATEGORIA'].isin(exit_category), 'Uscita', 
                                               np.where(transaction_df['CATEGORIA'].isin(ciroconti_category), 
                                                        'Giroconto', 'Entrata'))
@@ -154,7 +110,7 @@ if page == 'Expenses':
             st.dataframe(category_expenses)  
         else:
             category_expenses = (transaction_df[(transaction_df['TIPO TRANSAZIONE'] == 'Uscita') & (transaction_df['mese_anno'] == ym1)]
-                            .groupby(['mese_anno', 'CATEGORIA'])['IMPORTO']
+                            .groupby(['mese_anno', 'CATEGORIA'])[['IMPORTO']]
                             .sum())
             st.dataframe(category_expenses)
     
@@ -297,4 +253,5 @@ if page == 'Income':
     st.plotly_chart(fig)
         
 
-
+#if page == 'Assets':
+    
