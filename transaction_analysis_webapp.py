@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from transaction_exploration import graphical_analysis
 import plotly.graph_objects as go
 import plotly.express as px
+from get_financial_data import get_historical_data
 
 path = '/Users/lucariotto/Documents/Personal/Gestione denaro/Analisi spese/Gestione entrate-spese.xlsx'
 transaction_df = pd.read_excel(path, sheet_name='Transazioni')
@@ -252,6 +253,24 @@ if page == 'Income':
     )
     st.plotly_chart(fig)
         
+
+# assets analysis
+assets_df = pd.read_excel(path, sheet_name='Patrimonio')
+# expand data to obtain daily frequencies for all assets
+dates = list(assets_df['DATA'].unique()) + [pd.Timestamp.now()]
+asset_df_exp = pd.DataFrame(columns=assets_df.columns)
+for i in range(0, len(dates)-1):
+    dt_corr = dates[i]
+    dates_sup = dates[i+1] - pd.Timedelta(days=1)
+    date_seq = pd.DataFrame({'DATA' : pd.date_range(start=dt_corr, end=dates_sup, freq='D')})
+    assets_date_cor = (
+        date_seq
+        .merge(
+            assets_df[assets_df['DATA']==dt_corr],
+            how = 'cross'
+        )
+    )
+    asset_df_exp = pd.concat([asset_df_exp, assets_date_cor], axis=0)
 
 #if page == 'Assets':
     
