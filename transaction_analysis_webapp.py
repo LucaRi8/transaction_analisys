@@ -272,6 +272,46 @@ for i in range(0, len(dates)-1):
     )
     asset_df_exp = pd.concat([asset_df_exp, assets_date_cor], axis=0)
 
+# download financial data
+ticker = assets_df.dropna(subset=['TICKER'])['TICKER'].unique().tolist()
+fin_df = get_historical_data(ticker, '2019-01-01', pd.Timestamp.now())
+
+# expand data and calculate daily portfolio value
+asset_df_exp = (
+    asset_df_exp
+    .drop(columns=['DATA', 'DATA_y'])
+    .rename(columns={'DATA_x' : 'DATA'})
+)
+dta_df = pd.DataFrame({'DATA' : asset_df_exp["DATA"].unique()})
+fin_df = (
+    dta_df
+    .merge(
+        fin_df['Close']
+        .reset_index()
+        .rename(columns={'Date' : 'DATA'}),
+        on='DATA',
+        how='left')
+)
+fin_df[ticker] = fin_df[ticker].apply(lambda col: col.fillna(method='ffill'))
+
+fin_data = (
+    fin_df
+    .drop(columns=['DATA'])
+    .sort_index(axis=1)
+    .values
+)
+max_length = len(ticker)
+quantity_df = (
+    asset_df_exp[asset_df_exp['TICKER'].isin(ticker)]
+    .sort_values(by=['DATA', 'TICKER'])
+    .groupby('DATA')
+    .agg({'QUANTITA': list})['QUANTITA']
+    .apply(lambda x: x + [0] * (max_length - len(x)))
+)
+value_df = pd.DataFrame({
+    'DATA' : dta_df['DATA'],
+    'value' : np.diag(fin_data @ np.array(quantity_df.tolist()).T)}
+)
 
 #if page == 'Assets':
     

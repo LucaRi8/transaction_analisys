@@ -1,6 +1,6 @@
 import yfinance as yf
 
-def download_financial_data(ticker, start_date, end_date):
+def get_historical_data(ticker, start_date, end_date):
     """
     Downloads daily financial data for a given stock ticker between start and end dates.
 
