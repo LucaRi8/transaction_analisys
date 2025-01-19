@@ -313,5 +313,38 @@ value_df = pd.DataFrame({
     'value' : np.diag(fin_data @ np.array(quantity_df.tolist()).T)}
 )
 
+# calculate portfolio vaue for every date
+asset_df_exp = (
+    asset_df_exp[asset_df_exp['TICKER'].isna()]
+    .groupby('DATA')['QUANTITA']
+    .sum()
+    .reset_index()
+    .merge(value_df, on = 'DATA', how = 'inner')
+    .assign(curval=lambda x: x['value']+x['QUANTITA'])
+    .drop(columns=['value', 'QUANTITA'])
+)
+
+# calculate nominal portfolio vale give by the total value at the first date 
+# and the cumsum of cashflow at every date 
+min_date = min(asset_df_exp['DATA'])
+asset_init = asset_df_exp[asset_df_exp['DATA'] == min_date]['curval'].values
+cashflow_df = (
+    dta_df
+    .merge(
+        (transaction_df
+        .pivot_table(values='IMPORTO', index='DATA', columns='TIPO TRANSAZIONE', aggfunc='sum')
+        .reset_index()
+        .loc[lambda df: df['DATA'] >= min_date]
+        .fillna(0)
+        .assign(cashflow=lambda x: x['Entrata']-x['Uscita'])),
+        on='DATA',
+        how='left'
+    )
+    .sort_values('DATA')
+    .apply(lambda col: col.fillna(0) if col.name =='cashflow' else col)
+)
+cashflow_df.loc[cashflow_df['DATA'] == min_date, 'cashflow'] = asset_init
+cashflow_df['cashflow'] = cashflow_df['cashflow'].cumsum()
+
 #if page == 'Assets':
     
