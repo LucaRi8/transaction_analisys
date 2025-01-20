@@ -7,6 +7,8 @@ from transaction_exploration import graphical_analysis
 import plotly.graph_objects as go
 import plotly.express as px
 from get_financial_data import get_historical_data
+from datetime import datetime
+
 
 path = '/Users/lucariotto/Documents/Personal/Gestione denaro/Analisi spese/Gestione entrate-spese.xlsx'
 transaction_df = pd.read_excel(path, sheet_name='Transazioni')
@@ -343,8 +345,58 @@ cashflow_df = (
     .sort_values('DATA')
     .apply(lambda col: col.fillna(0) if col.name =='cashflow' else col)
 )
-cashflow_df.loc[cashflow_df['DATA'] == min_date, 'cashflow'] = asset_init
+cashflow_df.loc[cashflow_df['DATA'] == min_date, 'cashflow'] += asset_init
 cashflow_df['cashflow'] = cashflow_df['cashflow'].cumsum()
 
-#if page == 'Assets':
+if page == 'Assets':
+    st.title("Assets analysis")
+
+    col1, col2 = st.columns(2)
+    # date of time series
+    with col1:
+        start_date = pd.to_datetime(st.date_input("Select the start date", value=min_date))
+    with col2:
+        end_date = pd.to_datetime(st.date_input("Select the end date", value=datetime.now().date()))
+
+    # Validity check for the dates
+    if start_date > end_date:
+        st.error("The start date cannot be later than the end date. Please correct the dates.")
+    elif end_date > pd.Timestamp.now():
+        st.error("The end date cannot be later than the current date. Please correct the dates.")
+    else:
+        st.success(f"Selected range: from {start_date} to {end_date}")
     
+     # create plot object
+    fig = go.Figure()
+    # add line for nominal portfolio value
+    fig.add_trace(go.Scatter(
+        x=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'DATA'], 
+        y=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'cashflow'], 
+        mode='lines+markers',
+        name='Nominal portfolio value',
+        line=dict(color='blue'),
+        marker=dict(size=8)
+    ))
+
+    # add line for real portfolio value
+    fig.add_trace(go.Scatter(
+        x=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'DATA'], 
+        y=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'value'], 
+        mode='lines+markers',
+        name='Real portfolio value',
+        line=dict(color='red'),
+        marker=dict(size=8)
+    ))
+
+    # custom layout
+    fig.update_layout(
+        title="Time Series of Portfolio Value",
+        xaxis_title="Date",
+        yaxis_title="",
+        legend=dict(title="Legend", x=0.8, y=1),
+        template="plotly_white",
+        hovermode="x unified" 
+    )
+    
+    st.plotly_chart(fig)
+        
