@@ -330,7 +330,7 @@ value_df = pd.DataFrame({
     'value' : np.diag(fin_data @ np.array(quantity_df.tolist()).T)}
 )
 
-# calculate portfolio vaue for every date
+# calculate portfolio value for every date
 asset_df_exp = (
     asset_df_exp[asset_df_exp['TICKER'].isna()]
     .pivot_table(values='QUANTITA', index='DATA', columns='VOCE', aggfunc='sum', fill_value=0)
@@ -342,31 +342,40 @@ asset_df_exp = (
     .drop(columns=['value', 'QUANTITA', 'Attivita', 'Passivita'])
 )
 
-# calculate nominal portfolio value give by the total value at the first date 
-# and the cumsum of cashflow at every date 
-min_date = min(asset_df_exp['DATA'])
-asset_init = asset_df_exp[asset_df_exp['DATA'] == min_date]['curval'].values
-cashflow_df = (
-    dta_df
-    .merge(
-        (transaction_df
-        .pivot_table(values='IMPORTO', index='DATA', columns='TIPO TRANSAZIONE', aggfunc='sum')
-        .reset_index()
-        .loc[lambda df: df['DATA'] >= min_date]
-        .fillna(0)
-        .assign(cashflow=lambda x: x['Entrata']-x['Uscita'])),
-        on='DATA',
-        how='left'
+# calculate nominal portfolio value using nominal value prospect
+nominal_assets_df = pd.read_excel(path, sheet_name='Valori nominali')
+nominal_min_date = nominal_assets_df['DATA'].min()
+nominal_max_date = nominal_assets_df['DATA'].max()
+
+nominal_dates = list(nominal_assets_df['DATA'].unique()) + [pd.Timestamp.now()]
+nominal_asset_df_exp = pd.DataFrame(columns=assets_df.columns)
+for i in range(0, len(nominal_dates)-1):
+    dt_corr = dates[i]
+    dates_sup = nominal_dates[i+1] - pd.Timedelta(days=1)
+    date_seq = pd.DataFrame({'DATA' : pd.date_range(start=dt_corr, end=dates_sup, freq='D')})
+    nominal_assets_date_cor = (
+        date_seq
+        .merge(
+            nominal_assets_df[nominal_assets_df['DATA']==dt_corr],
+            how = 'cross'
+        )
     )
-    .sort_values('DATA')
-    .apply(lambda col: col.fillna(0) if col.name =='cashflow' else col)
+    nominal_asset_df_exp = pd.concat([nominal_asset_df_exp, nominal_assets_date_cor], axis=0)
+
+nominal_asset_df_exp = (
+    nominal_asset_df_exp
+    .drop(columns=['DATA', 'DATA_y'])
+    .rename(columns={'DATA_x' : 'DATA'})
+    .pivot_table(values='QUANTITA', index='DATA', columns='VOCE', aggfunc='sum', fill_value=0)
+    .reset_index()
+    .assign(VALUE=lambda x: x['Attivita']-x['Passivita'])
+    .drop(['Attivita', 'Passivita'], axis=1)
 )
-cashflow_df.loc[cashflow_df['DATA'] == min_date, 'cashflow'] += asset_init
-cashflow_df['cashflow'] = cashflow_df['cashflow'].cumsum()
 
 if page == 'Assets':
     st.title("Assets analysis")
 
+    min_date = min(asset_df_exp['DATA'])
     col1, col2 = st.columns(2)
     # date of time series
     with col1:
@@ -386,8 +395,8 @@ if page == 'Assets':
     fig = go.Figure()
     # add line for nominal portfolio value
     fig.add_trace(go.Scatter(
-        x=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'DATA'], 
-        y=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'cashflow'], 
+        x=nominal_asset_df_exp.loc[(nominal_asset_df_exp['DATA']>=start_date) & (nominal_asset_df_exp['DATA']<=end_date), 'DATA'], 
+        y=nominal_asset_df_exp.loc[(nominal_asset_df_exp['DATA']>=start_date) & (nominal_asset_df_exp['DATA']<=end_date), 'VALUE'], 
         mode='lines',
         name='Nominal portfolio value',
         line=dict(color='blue'),
@@ -396,8 +405,8 @@ if page == 'Assets':
 
     # add line for real portfolio value
     fig.add_trace(go.Scatter(
-        x=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'DATA'], 
-        y=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'value'], 
+        x=value_df.loc[(asset_df_exp['DATA']>=start_date) & (value_df['DATA']<=end_date), 'DATA'], 
+        y=value_df.loc[(asset_df_exp['DATA']>=start_date) & (value_df['DATA']<=end_date), 'value'], 
         mode='lines',
         name='Real portfolio value',
         line=dict(color='red'),
@@ -407,6 +416,50 @@ if page == 'Assets':
     # custom layout
     fig.update_layout(
         title="Time Series of Portfolio Value",
+        xaxis_title="Date",
+        yaxis_title="",
+        legend=dict(title="Legend", x=0.8, y=1),
+        template="plotly_white",
+        hovermode="x unified" 
+    )
+    
+    st.plotly_chart(fig)
+
+    # plot of the yeld given by the variation between nominal and real portfolio value
+    yeld_df = pd.DataFrame({
+        'DATA' : asset_df_exp['DATA'],
+        'VALUE' : (asset_df_exp['curval']/nominal_asset_df_exp['VALUE']) - 1
+    })
+    st.write('<p style="font-size:24px; color:white;">Plot of the portfolio value variation due to investments</p>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    # date of time series
+    with col1:
+        start_date = pd.to_datetime(st.date_input("Select the start date", value=min_date, key='min_date_yelds'))
+    with col2:
+        end_date = pd.to_datetime(st.date_input("Select the end date", value=datetime.now().date(), key='max_date_yelds'))
+
+    # Validity check for the dates
+    if start_date > end_date:
+        st.error("The start date cannot be later than the end date. Please correct the dates.")
+    elif end_date > pd.Timestamp.now():
+        st.error("The end date cannot be later than the current date. Please correct the dates.")
+    else:
+        st.success(f"Selected range: from {start_date} to {end_date}")
+    
+     # create plot object
+    fig = go.Figure()
+    # add line for nominal portfolio value
+    fig.add_trace(go.Scatter(
+        x=yeld_df.loc[(yeld_df['DATA']>=start_date) & (yeld_df['DATA']<=end_date), 'DATA'], 
+        y=yeld_df.loc[(yeld_df['DATA']>=start_date) & (yeld_df['DATA']<=end_date), 'VALUE'], 
+        mode='lines',
+        name='Nominal portfolio value',
+        line=dict(color='blue'),
+        marker=dict(size=8)
+    ))
+    # custom layout
+    fig.update_layout(
+        title="Time Series of total portfolio yeld",
         xaxis_title="Date",
         yaxis_title="",
         legend=dict(title="Legend", x=0.8, y=1),
@@ -487,3 +540,48 @@ if page == 'Assets':
             legend=dict(title="Categories", orientation="v", x=1, y=1),
         )
         st.plotly_chart(fig)
+
+    # plot of the different financial asset time series
+    st.write('<p style="font-size:24px; color:white;">Time series f finaancial assets</p>', unsafe_allow_html=True)
+    tk = st.selectbox('Pick a ticker', ticker)
+    min_date = min(assets_df.loc[assets_df['TICKER'] == tk, 'DATA'])
+    
+    col1, col2 = st.columns(2)
+    # date of time series
+    with col1:
+        start_date = pd.to_datetime(st.date_input("Select the start date", value=min_date, key='ticker_min_date'))
+    with col2:
+        end_date = pd.to_datetime(st.date_input("Select the end date", value=datetime.now().date(), key='ticker_max_date'))
+
+    # Validity check for the dates
+    if start_date > end_date:
+        st.error("The start date cannot be later than the end date. Please correct the dates.")
+    elif end_date > pd.Timestamp.now():
+        st.error("The end date cannot be later than the current date. Please correct the dates.")
+    else:
+        st.success(f"Selected range: from {start_date} to {end_date}")
+    
+    # create plot object
+    fig = go.Figure()
+    # add line for nominal portfolio value
+    fig.add_trace(go.Scatter(
+        x=fin_df.loc[(fin_df['DATA']>=start_date) & (fin_df['DATA']<=end_date), 'DATA'], 
+        y=fin_df.loc[(fin_df['DATA']>=start_date) & (fin_df['DATA']<=end_date), tk], 
+        mode='lines',
+        name='Nominal portfolio value',
+        line=dict(color='blue'),
+        marker=dict(size=8)
+    ))
+
+    # custom layout
+    fig.update_layout(
+        title=f"Time Series of {tk}",
+        xaxis_title="Date",
+        yaxis_title="",
+        legend=dict(title="Legend", x=0.8, y=1),
+        template="plotly_white",
+        hovermode="x unified" 
+    )
+    
+    st.plotly_chart(fig)
+    
