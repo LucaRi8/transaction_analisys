@@ -304,12 +304,27 @@ fin_data = (
 )
 max_length = len(ticker)
 quantity_df = (
-    asset_df_exp[asset_df_exp['TICKER'].isin(ticker)]
-    .sort_values(by=['DATA', 'TICKER'])
+    dta_df
+    .merge(
+        pd.DataFrame(
+            asset_df_exp
+            .dropna(subset=['TICKER'])['TICKER']
+            .unique(), 
+            columns=['TICKER']
+        ),
+        how='cross'
+    )
+    .merge(
+        asset_df_exp[['DATA','TICKER', 'QUANTITA']]
+        .dropna(subset=['TICKER']),
+        on=['DATA', 'TICKER'], how='left'
+    )
+    .fillna(0)
+    .sort_values(['DATA', 'TICKER'])
     .groupby('DATA')
     .agg({'QUANTITA': list})['QUANTITA']
-    .apply(lambda x: x + [0] * (max_length - len(x)))
 )
+
 value_df = pd.DataFrame({
     'DATA' : dta_df['DATA'],
     'value' : np.diag(fin_data @ np.array(quantity_df.tolist()).T)}
@@ -318,15 +333,16 @@ value_df = pd.DataFrame({
 # calculate portfolio vaue for every date
 asset_df_exp = (
     asset_df_exp[asset_df_exp['TICKER'].isna()]
-    .groupby('DATA')['QUANTITA']
-    .sum()
+    .pivot_table(values='QUANTITA', index='DATA', columns='VOCE', aggfunc='sum', fill_value=0)
     .reset_index()
-    .merge(value_df, on = 'DATA', how = 'inner')
+    .assign(QUANTITA=lambda x: x['Attivita']-x['Passivita'])
+    .merge(value_df, on = 'DATA', how = 'outer')
+    .fillna(0)
     .assign(curval=lambda x: x['value']+x['QUANTITA'])
-    .drop(columns=['value', 'QUANTITA'])
+    .drop(columns=['value', 'QUANTITA', 'Attivita', 'Passivita'])
 )
 
-# calculate nominal portfolio vale give by the total value at the first date 
+# calculate nominal portfolio value give by the total value at the first date 
 # and the cumsum of cashflow at every date 
 min_date = min(asset_df_exp['DATA'])
 asset_init = asset_df_exp[asset_df_exp['DATA'] == min_date]['curval'].values
@@ -372,7 +388,7 @@ if page == 'Assets':
     fig.add_trace(go.Scatter(
         x=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'DATA'], 
         y=cashflow_df.loc[(cashflow_df['DATA']>=start_date) & (cashflow_df['DATA']<=end_date), 'cashflow'], 
-        mode='lines+markers',
+        mode='lines',
         name='Nominal portfolio value',
         line=dict(color='blue'),
         marker=dict(size=8)
@@ -382,7 +398,7 @@ if page == 'Assets':
     fig.add_trace(go.Scatter(
         x=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'DATA'], 
         y=value_df.loc[(value_df['DATA']>=start_date) & (value_df['DATA']<=end_date), 'value'], 
-        mode='lines+markers',
+        mode='lines',
         name='Real portfolio value',
         line=dict(color='red'),
         marker=dict(size=8)
@@ -399,4 +415,75 @@ if page == 'Assets':
     )
     
     st.plotly_chart(fig)
-        
+
+    # table and pie plot of asset class allocation
+    max_dta = max(assets_df['DATA'])
+    asset_alloc_no_tk = (
+        assets_df[
+            (assets_df['DATA'] == max_dta) &
+            (assets_df['TICKER'].isna()) &
+            (assets_df['VOCE'] == 'Attivita') 
+        ]   
+        .groupby(['DATA', 'ASSET CLASS'])
+        .agg({'QUANTITA': sum})
+        .reset_index()
+    )
+    ticker_melt = (
+        fin_df[fin_df['DATA'] == max_dta]
+        .melt(
+            id_vars='DATA', 
+            value_vars=assets_df.loc[(assets_df['DATA'] == max_dta) & (~assets_df['TICKER'].isna()), 'TICKER'].unique(), 
+            var_name='TICKER',         
+            value_name='VALUE'
+        )
+    )
+    asset_alloc_tk = (
+        assets_df.loc[
+            (assets_df['DATA'] == max_dta) &
+            (~assets_df['TICKER'].isna()) &
+            (assets_df['VOCE'] == 'Attivita'),
+            ['DATA', 'ASSET CLASS', 'TICKER', 'QUANTITA']
+        ]
+        .merge(
+            ticker_melt,
+            on=['DATA', 'TICKER'],
+            how='left'
+        )
+        .assign(QUANTITA = lambda x: x['QUANTITA'] * x['VALUE'])
+        .drop(['VALUE', 'TICKER'], axis=1)
+    )
+    asset_alloc_df = (
+        pd.concat([asset_alloc_no_tk, asset_alloc_tk], axis=0)
+        .groupby('ASSET CLASS')
+        .sum("QUANTITA")
+    )
+
+    total_portfolio = sum(asset_alloc_df['QUANTITA'])
+    asset_alloc_df['% ASSET ALLOCATION'] = round(asset_alloc_df['QUANTITA'] / total_portfolio * 100, 2)
+
+    st.write('<p style="font-size:24px; color:white;">Asset class allocation</p>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.dataframe(asset_alloc_df)
+
+    with col2:
+        asset_alloc_df.reset_index(inplace=True)
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=asset_alloc_df['ASSET CLASS'],  
+                    values=asset_alloc_df['QUANTITA'],  
+                    hoverinfo='label+percent+value', 
+                    textinfo='percent',  
+                    #marker=dict(colors=['#636EFA', '#EF553B', '#00CC96', '#AB63FA']),  # Custom colors
+                    )
+                ]
+        )
+        # Update layout to include a legend
+        fig.update_layout(
+            title="Asset Class Distribution",
+            legend=dict(title="Categories", orientation="v", x=1, y=1),
+        )
+        st.plotly_chart(fig)
