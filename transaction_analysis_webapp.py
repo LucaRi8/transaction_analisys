@@ -26,10 +26,10 @@ for key in categories_associations:
                                                    'SOTTOCATEGORIA' : categories_associations[key]})],
                                                      axis=0)
 df_outer_join = pd.merge(
-    mese_anno_df,  # seleziona solo la colonna 'mese_anno'
-    category_df,  # seleziona solo la colonna 'categoria'
-    how='cross',  # tipo di join (outer per includere tutte le combinazioni)
-    on=None,  # nessuna colonna su cui fare l'unione
+    mese_anno_df,  
+    category_df, 
+    how='cross',  
+    on=None,  
 )
 df_outer_join.rename(columns={'CATEGORIE': 'CATEGORIA'}, inplace=True)
 df_outer_join = pd.merge(
@@ -58,18 +58,18 @@ transact_plot = graphical_analysis(transaction_df)
 
 # page configuration
 st.set_page_config(
-    page_title="Transaction Analysis",  # Title of broswer page
+    page_title="Transaction Analysis",  
     page_icon=":bar_chart :",  
-    layout="wide"  # Layout 
+    layout="wide"  
 )
 page = st.sidebar.radio('Pages', options=['Expenses', 'Income', 'Assets'])
 
 # window of mooving average selection
 window = st.sidebar.number_input(
         "Insert the window size for mooving average for all expenses plot",
-        min_value=2,  # min value
-        value=12,      # default value
-        step=1        # step
+        min_value=2,  
+        value=12,      
+        step=1        
         )
 
 if page == 'Expenses':
@@ -122,10 +122,10 @@ if page == 'Expenses':
         fig = go.Figure(
             data=[
                 go.Pie(
-                    labels=category_expenses['CATEGORIA'],        # Labels (categories)
-                    values=category_expenses['IMPORTO'],           # Values
-                    hoverinfo='label+percent+value', # Show label, percentage, and value on hover
-                    textinfo='percent',           # Display only percentage on the pie chart
+                    labels=category_expenses['CATEGORIA'],        
+                    values=category_expenses['IMPORTO'],         
+                    hoverinfo='label+percent+value', 
+                    textinfo='percent',      
                     #marker=dict(colors=['#636EFA', '#EF553B', '#00CC96', '#AB63FA']),  # Custom colors
                     )
                 ]
@@ -240,10 +240,10 @@ if page == 'Income':
     fig = go.Figure(
         data=[
             go.Pie(
-                labels=income_df['CATEGORIA'],        # Labels (categories)
-                values=income_df['IMPORTO'],           # Values
-                hoverinfo='label+percent+value', # Show label, percentage, and value on hover
-                textinfo='percent',           # Display only percentage on the pie chart
+                labels=income_df['CATEGORIA'],      
+                values=income_df['IMPORTO'],         
+                hoverinfo='label+percent+value',
+                textinfo='percent',  
                 #marker=dict(colors=['#636EFA', '#EF553B', '#00CC96', '#AB63FA']),  # Custom colors
                 )
             ]
